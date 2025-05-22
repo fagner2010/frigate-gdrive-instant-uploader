@@ -1,26 +1,28 @@
-# Frigate to Google Drive Instant Uploader with MQTT
-This is a simple script that uploads event clips from Frigate to Google Drive instantly using MQTT (without cronjobs).
-It uses a SQLite database to keep track of uploaded events and only uploads new events. In case of an error,
-the script will retry to upload the event clip.
+# Frigate to Google Drive Instant Uploader with MQTT (Suporte a Rclone)
 
-Because I'm using Mattermost as chat software, 
-I've added a webhook to send a message to a Mattermost channel when an error occurs.
+Este é um script simples que envia clipes de eventos do Frigate para o Google Drive instantaneamente via MQTT, sem a necessidade de cronjobs.
+A principal modificação é que o upload agora é feito utilizando o rclone, que facilita a integração com Google Drive, tornando o processo mais confiável e flexível.
 
-You'll need a MQTT broker like Apache Mosquitto or similar. This script watches for new events from Frigate 
-and uploads them to Google Drive within seconds.
+O script usa um banco de dados SQLite para controlar quais eventos já foram enviados, garantindo que somente novos clipes sejam enviados. Em caso de erro, o upload é tentado novamente automaticamente.
 
-In my case I use Apache Mosquitto as MQTT broker and Frigate as NVR software. Frigate, Mosquitto 
-and this script are running on the same Proxmox server in LXC containers.
+Além disso, foi incluído um webhook para enviar mensagens a um canal Mattermost quando ocorrer algum erro, ajudando no monitoramento.
 
-# Requirements
-- python 3.8
-- MQTT broker
-- Frigate with configured MQTT
-- Google Service Account with access to Google Drive
+Funcionamento básico
+O script fica "ouvindo" eventos novos do Frigate publicados via MQTT e faz o upload do clipe correspondente ao Google Drive em poucos segundos, utilizando o rclone para transferir os arquivos.
 
-# Example Frigate configuration
+No meu ambiente de teste, uso Apache Mosquitto como broker MQTT, Frigate como NVR, e tudo isso rodando em containers LXC no Proxmox.
+
+# Requisitos
+
+Python 3.8 ou superior
+Broker MQTT (exemplo: Apache Mosquitto)
+Frigate configurado para publicar eventos MQTT
+Rclone configurado para acesso ao Google Drive
+Google Service Account com permissões no Google Drive (configurada no rclone)
+
+# Exemplo de configuração MQTT do Frigate
+
 ```yaml
-
 mqtt:
   host: 192.168.0.55
   user: username
@@ -29,28 +31,52 @@ mqtt:
   topic_prefix: frigate
   client_id: frigate
 
-# rest of your config.yml
+# restante da configuração do Frigate
 ````
 
-Check if your MQTT broker is working by subscribing to the topic `frigate/events` with a MQTT client like MQTT Explorer 
-or mosquitto_sub. If so, you should see events from Frigate and can use this script.
+Você pode verificar se o MQTT está funcionando assinando o tópico `frigate/events` com um cliente MQTT, como MQTT Explorer ou mosquitto_sub. Se receber eventos, o script pode processá-los.
 
-# Usage without Docker
-1. clone this repository
-2. rename `env_example` to `.env` and change values to your needs
-3. run `python setup.py` in project root directory to install all required packages
-4. create a project in google cloud console and enable drive api
-5. create a service account and give it access to your Google Drive
-6. activate domain-wide-delegation for the service account and add the necessary scope "https://www.googleapis.com/auth/drive" to prevent "Quota Exceeded" errors if you upload more than 15 GB per day.
-7. download the service account json file from Google and copy its content to `credentials/service_account.json`
-8. run `python main.py` in project root directory
+# Configuração do Rclone para Google Drive
 
-# Usage with Docker
-1. clone this repository
-2. rename `env_example` to `.env` and change values to your needs
-3. create a project in google cloud console and enable drive api
-4. create a service account and give it access to your Google Drive
-5. download the service account json file from Google and copy its content to `credentials/service_account.json`
-6. activate domain-wide-delegation for the service account and add the necessary scope "https://www.googleapis.com/auth/drive" to prevent "Quota Exceeded" errors if you upload more than 15 GB per day.
-7. run `docker compose up -d` in project root directory
-8. check logs with `docker logs frigate-gdrive-instant-uploader` or see `/logs/app.log`
+Para evitar limitações e quotas padrão, é recomendável criar seu próprio Client ID e Client Secret para o Google Drive, seguindo a documentação oficial do rclone:
+
+👉 https://rclone.org/drive/#making-your-own-client-id
+
+Passos básicos:
+
+Crie um projeto no Google Cloud Console.
+Ative a API do Google Drive.
+Configure as credenciais OAuth para obter Client ID e Client Secret.
+Configure o rclone com esses dados, criando um remote do tipo drive.
+Teste o rclone para garantir que está funcionando corretamente.
+
+# Uso sem Docker
+
+1. Clone este repositório.
+2. Renomeie `env_example` para `.env` e ajuste as variáveis conforme seu ambiente.
+3. Crie e ative um ambiente virtual Python:
+4. `cd /root/frigate-gdrive-instant-uploader`
+5. `python3 -m venv venv`
+6. `source venv/bin/activate`
+7. Instale as dependências:
+8. `pip install -r requirements.txt`
+9. Configure o rclone para Google Drive conforme explicado acima.
+10. Execute o script com:
+11. `python main.py`
+    
+# Uso com Docker
+
+1. Clone este repositório.
+2. Renomeie `env_example` para `.env` e configure conforme necessário.
+3. Configure o rclone na imagem Docker (incluindo o arquivo de configuração do rclone no container).
+4. Execute:
+5. `docker compose up -d`
+6. Verifique os logs com:
+7. `docker logs frigate-gdrive-instant-uploader`
+8. ou no arquivo /logs/app.log.
+Considerações finais
+
+Com a integração via rclone, o upload para Google Drive fica mais robusto, e você pode usar as facilidades do rclone, como cache, controle de banda, criptografia, entre outros.
+
+Para mais informações sobre o rclone e Google Drive, consulte a documentação oficial:
+https://rclone.org/drive/
